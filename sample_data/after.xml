@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" args="nmap -sS -sV -oX after.xml 192.168.56.101" start="1792665600" startstr="Thu Oct 22 11:00:00 2026" version="7.95">
+<host><status state="up" reason="arp-response"/><address addr="192.168.56.101" addrtype="ipv4"/><hostnames><hostname name="lab-target" type="PTR"/></hostnames><ports>
+<port protocol="tcp" portid="22"><state state="open" reason="syn-ack"/><service name="ssh" product="OpenSSH" version="9.7p1"/></port>
+<port protocol="tcp" portid="80"><state state="filtered" reason="no-response"/><service name="http" product="Apache httpd" version="2.4.58"/></port>
+<port protocol="tcp" portid="443"><state state="closed" reason="reset"/><service name="https"/></port>
+<port protocol="tcp" portid="8080"><state state="open" reason="syn-ack"/><service name="http-proxy" product="Example Service" version="2.0"/></port>
+</ports></host><runstats><finished time="1792665601" timestr="Thu Oct 22 11:00:01 2026" exit="success"/><hosts up="1" down="0" total="1"/></runstats></nmaprun>

@@ -1,0 +1,5 @@
+scan_time,ip_address,addresses,host_status,port,protocol,state,service,product,version,service_method,service_confidence,reason
+Thu Oct 22 22:17:39 2026,172.17.104.158,172.17.104.158 (ipv4),up,135,tcp,open,msrpc,Microsoft Windows RPC,,probed,10,syn-ack
+Thu Oct 22 22:17:39 2026,172.17.104.158,172.17.104.158 (ipv4),up,139,tcp,open,netbios-ssn,Microsoft Windows netbios-ssn,,probed,10,syn-ack
+Thu Oct 22 22:17:39 2026,172.17.104.158,172.17.104.158 (ipv4),up,445,tcp,open,microsoft-ds,,,table,3,syn-ack
+Thu Oct 22 22:17:39 2026,172.17.104.158,172.17.104.158 (ipv4),up,8080,tcp,open,http,Oracle XML DB Enterprise Edition httpd,,probed,10,syn-ack
