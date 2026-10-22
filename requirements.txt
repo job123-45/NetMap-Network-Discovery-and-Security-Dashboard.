@@ -1,0 +1,5 @@
+# Core CLI uses only Python's standard library.
+# Optional interactive dashboard:
+streamlit>=1.40,<2.0
+pandas>=2.0,<4.0
+altair>=5.0,<7.0
