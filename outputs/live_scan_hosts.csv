@@ -1,2 +1,0 @@
-scan_time,ip_address,address_type,addresses,host_status,reason,hostname
-Thu Oct 22 22:17:39 2026,172.17.104.158,ipv4,172.17.104.158 (ipv4),up,user-set,
