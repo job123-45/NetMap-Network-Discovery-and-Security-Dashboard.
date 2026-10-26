@@ -1131,29 +1131,37 @@ def _persist_local_snapshot(parsed: dict[str, Any]) -> str:
 def cmd_db(args: argparse.Namespace) -> int:
     import netmap_store
 
+    db_path = netmap_store.database_path(synthetic=args.synthetic)
     if args.db_action == "init":
-        path = netmap_store.initialize()
+        path = netmap_store.initialize(db_path)
         print(f"Initialized local NetMap database: {path}")
     elif args.db_action == "import":
         parsed = parse_scan(args.xml)
-        if is_bundled_synthetic(parsed):
+        if args.synthetic or is_bundled_synthetic(parsed):
             set_scan_provenance(parsed, "synthetic_demo", Path(args.xml).name)
         findings = analyze_exposure(parsed)
-        snapshot_id, duplicate = netmap_store.store_snapshot(parsed, findings)
+        path = netmap_store.database_path(
+            synthetic=parsed.get("source_kind") == "synthetic_demo"
+        )
+        snapshot_id, duplicate = netmap_store.store_snapshot(
+            parsed, findings, path=path
+        )
         print(f"Snapshot {'already stored' if duplicate else 'stored'}: {snapshot_id}")
     elif args.db_action == "list":
-        snapshots = netmap_store.list_snapshots()
+        snapshots = netmap_store.list_snapshots(db_path)
         print(json.dumps(snapshots, indent=2, sort_keys=True))
     elif args.db_action == "backup":
-        path = netmap_store.backup_database(args.output)
+        path = netmap_store.backup_database(args.output, db_path)
         print(f"Database backup created: {path}")
     elif args.db_action == "restore":
-        path = netmap_store.restore_database(args.input, confirmed=args.confirm_restore)
+        path = netmap_store.restore_database(
+            args.input, db_path, confirmed=args.confirm_restore
+        )
         print(f"Database restored: {path}")
     elif args.db_action == "delete":
         if not args.yes:
             raise ValueError("Snapshot deletion requires --yes.")
-        netmap_store.delete_snapshot(args.snapshot_id)
+        netmap_store.delete_snapshot(args.snapshot_id, db_path)
         print("Selected snapshot and dependent observations deleted.")
     return 0
 
@@ -1444,22 +1452,30 @@ def build_parser() -> argparse.ArgumentParser:
     check.set_defaults(func=cmd_check)
     database = subs.add_parser("db", help="manage the local NetMap inventory database")
     db_actions = database.add_subparsers(dest="db_action", required=True)
-    db_actions.add_parser("init", help="initialize the local inventory database")
+    db_init = db_actions.add_parser(
+        "init", help="initialize the local inventory database"
+    )
+    db_init.add_argument("--synthetic", action="store_true")
     db_import = db_actions.add_parser("import", help="import one Nmap XML snapshot")
     db_import.add_argument("xml", help="input Nmap XML file")
-    db_actions.add_parser("list", help="list stored snapshots")
+    db_import.add_argument("--synthetic", action="store_true")
+    db_list = db_actions.add_parser("list", help="list stored snapshots")
+    db_list.add_argument("--synthetic", action="store_true")
     db_backup = db_actions.add_parser("backup", help="create a verified SQLite backup")
     db_backup.add_argument("--output", required=True)
+    db_backup.add_argument("--synthetic", action="store_true")
     db_restore = db_actions.add_parser(
         "restore", help="restore a verified SQLite backup"
     )
     db_restore.add_argument("--input", required=True)
     db_restore.add_argument("--confirm-restore", action="store_true")
+    db_restore.add_argument("--synthetic", action="store_true")
     db_delete = db_actions.add_parser(
         "delete", help="delete one snapshot and dependent data"
     )
     db_delete.add_argument("snapshot_id")
     db_delete.add_argument("--yes", action="store_true")
+    db_delete.add_argument("--synthetic", action="store_true")
     database.set_defaults(func=cmd_db)
     discovery = subs.add_parser(
         "discover", help="discover hosts in a small private host-only subnet"

@@ -28,11 +28,11 @@ jobs:
       - name: Run unit and dashboard tests
         run: python -m unittest discover -s tests -v
       - name: Compile Python files
-        run: python -m py_compile netmap.py netmap_models.py netmap_store.py dashboard.py tests/test_netmap.py tests/test_netmap_store.py tests/test_dashboard_overview.py
+        run: python -m py_compile netmap.py netmap_models.py netmap_store.py dashboard.py tests/test_netmap.py tests/test_netmap_store.py tests/test_dashboard_overview.py tests/test_end_to_end.py
       - name: Lint Python files
-        run: python -m ruff check netmap.py netmap_models.py netmap_store.py dashboard.py tests/test_netmap.py tests/test_netmap_store.py tests/test_dashboard_overview.py
+        run: python -m ruff check netmap.py netmap_models.py netmap_store.py dashboard.py tests/test_netmap.py tests/test_netmap_store.py tests/test_dashboard_overview.py tests/test_end_to_end.py
       - name: Check Python formatting
-        run: python -m ruff format --check netmap.py netmap_models.py netmap_store.py dashboard.py tests/test_netmap.py tests/test_netmap_store.py tests/test_dashboard_overview.py
+        run: python -m ruff format --check netmap.py netmap_models.py netmap_store.py dashboard.py tests/test_netmap.py tests/test_netmap_store.py tests/test_dashboard_overview.py tests/test_end_to_end.py
       - name: Check dependency consistency
         run: python -m pip check
       - name: Audit declared dependencies

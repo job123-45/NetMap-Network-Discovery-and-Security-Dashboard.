@@ -739,13 +739,18 @@ def database_stats(path: str | Path | None = None) -> dict[str, int]:
 
 
 def backup_database(destination: str | Path, source: str | Path | None = None) -> Path:
-    src = initialize(source)
+    src = Path(source) if source else database_path()
+    if not src.is_file():
+        raise ValueError("No initialized NetMap database is available to back up.")
+    initialize(src)
     dst = Path(destination).expanduser().resolve()
     if dst == src.resolve():
         raise ValueError("Backup destination must differ from the active database.")
-    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        raise ValueError("Backup destination already exists; choose a new path.")
     temporary = None
     try:
+        dst.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             dir=dst.parent, prefix=f".{dst.name}.", suffix=".tmp", delete=False
         ) as handle:
@@ -753,7 +758,10 @@ def backup_database(destination: str | Path, source: str | Path | None = None) -
         with _raw_database(src) as source_db, _raw_database(temporary) as backup_db:
             source_db.backup(backup_db)
         _validate_backup(temporary)
-        os.replace(temporary, dst)
+        # Linking in the same directory publishes atomically without replacing
+        # a destination that appeared after the initial existence check.
+        os.link(temporary, dst)
+        temporary.unlink()
         if os.name != "nt":
             dst.chmod(0o600)
         return dst

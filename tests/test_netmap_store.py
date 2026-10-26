@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -106,17 +107,40 @@ class NetMapStoreTests(unittest.TestCase):
         )
 
     def test_comparison_backup_restore_and_delete(self):
-        first, _ = netmap_store.store_snapshot(sample_snapshot("a" * 64), path=self.db)
+        first, _ = netmap_store.store_snapshot(
+            sample_snapshot("a" * 64), [sample_finding()], path=self.db
+        )
         second, _ = netmap_store.store_snapshot(sample_snapshot("b" * 64), path=self.db)
+        finding = netmap_store.list_findings(self.db)[0]
+        netmap_store.update_finding(
+            finding["finding_id"],
+            "in_progress",
+            investigation_note="Persisted in backup",
+            path=self.db,
+        )
         netmap_store.save_comparison(first, second, [{"change": "none"}], self.db)
         self.assertEqual(len(netmap_store.list_comparisons(self.db)), 1)
         backup = Path(self.temp.name) / "backup.sqlite3"
         netmap_store.backup_database(backup, self.db)
+        original_backup = backup.read_bytes()
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            netmap_store.backup_database(backup, self.db)
+        self.assertEqual(backup.read_bytes(), original_backup)
         restored = Path(self.temp.name) / "restored.sqlite3"
         with self.assertRaises(ValueError):
             netmap_store.restore_database(backup, restored)
         netmap_store.restore_database(backup, restored, confirmed=True)
         self.assertEqual(len(netmap_store.list_snapshots(restored)), 2)
+        restored_finding = netmap_store.list_findings(restored)[0]
+        self.assertEqual(restored_finding["status"], "in_progress")
+        self.assertEqual(restored_finding["investigation_note"], "Persisted in backup")
+        self.assertEqual(
+            netmap_store.finding_history(restored_finding["finding_id"], restored)[-1][
+                "to_status"
+            ],
+            "in_progress",
+        )
+        self.assertEqual(len(netmap_store.list_comparisons(restored)), 1)
         netmap_store.delete_snapshot(first, self.db)
         self.assertEqual(len(netmap_store.list_snapshots(self.db)), 1)
         self.assertEqual(netmap_store.list_comparisons(self.db), [])
@@ -126,6 +150,47 @@ class NetMapStoreTests(unittest.TestCase):
             self.assertNotEqual(
                 netmap_store.database_path(), netmap_store.database_path(synthetic=True)
             )
+
+    def test_failed_import_and_backup_validation_leave_no_partial_data(self):
+        malformed = sample_snapshot()
+        malformed["hosts"] = malformed["hosts"] * 2
+        with self.assertRaises(sqlite3.IntegrityError):
+            netmap_store.store_snapshot(malformed, path=self.db)
+        self.assertEqual(netmap_store.list_snapshots(self.db), [])
+
+        netmap_store.store_snapshot(sample_snapshot(), path=self.db)
+        invalid = Path(self.temp.name) / "corrupt.sqlite3"
+        invalid.write_bytes(b"not a sqlite backup")
+        target = Path(self.temp.name) / "new-target.sqlite3"
+        with self.assertRaises(ValueError):
+            netmap_store.restore_database(invalid, target, confirmed=True)
+        self.assertFalse(target.exists())
+
+        incompatible = Path(self.temp.name) / "incompatible.sqlite3"
+        db = sqlite3.connect(incompatible)
+        try:
+            db.execute("CREATE TABLE unrelated (value TEXT)")
+            db.execute("PRAGMA user_version = 99")
+            db.commit()
+        finally:
+            db.close()
+        with self.assertRaises(ValueError):
+            netmap_store.restore_database(incompatible, target, confirmed=True)
+        self.assertFalse(target.exists())
+        self.assertEqual(len(netmap_store.list_snapshots(self.db)), 1)
+
+        blocked_parent = Path(self.temp.name) / "file-not-directory"
+        blocked_parent.write_text("x", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            netmap_store.backup_database(blocked_parent / "backup.sqlite3", self.db)
+
+    def test_backup_of_missing_database_does_not_create_source(self):
+        missing = Path(self.temp.name) / "missing.sqlite3"
+        with self.assertRaises(ValueError):
+            netmap_store.backup_database(
+                Path(self.temp.name) / "backup.sqlite3", missing
+            )
+        self.assertFalse(missing.exists())
 
 
 if __name__ == "__main__":

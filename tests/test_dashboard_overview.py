@@ -79,6 +79,26 @@ class DashboardInputTests(unittest.TestCase):
         control(app, "radio", "Workspace").set_value("Finding Triage").run()
         self.assertFalse(app.exception)
         self.assertTrue(any(item.label == "Save triage" for item in app.button))
+        control(app, "selectbox", "Set status").set_value("in_progress")
+        control(app, "text_area", "Investigation note").set_value(
+            "Synthetic verification note"
+        )
+        control(app, "button", "Save triage").click().run()
+        self.assertFalse(app.exception)
+        demo_db = netmap_store.database_path(synthetic=True)
+        finding = netmap_store.list_findings(demo_db)[0]
+        self.assertEqual(finding["status"], "in_progress")
+        self.assertEqual(finding["investigation_note"], "Synthetic verification note")
+        history = netmap_store.finding_history(finding["finding_id"], demo_db)
+        self.assertEqual(history[-1]["to_status"], "in_progress")
+
+        restarted = self.start()
+        self.load_synthetic(restarted)
+        control(restarted, "radio", "Workspace").set_value("Finding Triage").run()
+        self.assertFalse(restarted.exception)
+        self.assertEqual(
+            control(restarted, "selectbox", "Set status").value, "in_progress"
+        )
 
     def test_comparison_uploads_are_separate_and_use_coverage_aware_changes(self):
         app = self.start()
