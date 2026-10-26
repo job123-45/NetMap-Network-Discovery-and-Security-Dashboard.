@@ -15,3 +15,10 @@ evidence/NetMap_Screenshot_Evidence.docx
 evidence/NetMap_Screenshot_Evidence.pdf
 NetMap_Assessment_9_Report.docx
 NetMap_Assessment_9_Report.pdf
+
+# Keep live and self-scan results local.
+scans/live_scan*
+scans/nmap_scan_capture.pcapng
+outputs/live_scan*
+scans/windows-own-pc.*
+outputs/windows-own-pc.*
