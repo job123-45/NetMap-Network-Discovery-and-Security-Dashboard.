@@ -16,7 +16,7 @@ This file tracks the current local-first XML workflow. Verification details are 
 ## Verification scope
 
 - The full test and dependency audit are run at final verification. See `evidence/verification_results.txt` for exact commands and results.
-- Nmap was unavailable during this work. No live network scan or third-party integration is claimed.
+- Nmap is installed in the final audit environment, but no live network scan was run. The optional CLI subprocess is verified with a mock only.
 - AppTest is used for dashboard workflow coverage; a manual browser/download review is not claimed unless explicitly recorded.
 - Repository history has not been rewritten. The open artifact-remediation PR removes sensitive material from the current tree only.
 
