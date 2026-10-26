@@ -73,7 +73,7 @@ py netmap.py demo
 py -m streamlit run dashboard.py
 ```
 
-The CLI creates ignored files under `outputs/demo/`: baseline/after JSON, inventory CSV, findings CSV, HTML, SVG, and a comparison CSV/HTML. In the dashboard, click **Load synthetic demonstration** to load the fixture into the overview. The UI labels it **SYNTHETIC DEMONSTRATION DATA — NOT A LIVE SCAN**. The app does not load fixtures automatically.
+The CLI writes reports under ignored `outputs/demo/` and persists baseline, later snapshot, findings, and comparison to the separate synthetic database. In the dashboard, click **Load synthetic demonstration** to load the fixture. The UI labels it **SYNTHETIC DEMONSTRATION DATA — NOT A LIVE SCAN**. Exact bundled fixture content remains in the synthetic database even when uploaded for comparison. The app does not load fixtures automatically.
 
 ## Import an Nmap XML scan
 
@@ -87,12 +87,15 @@ By default, NetMap stores the operational database in the user's application dat
 py netmap.py db init
 py netmap.py db import path\to\authorized-scan.xml
 py netmap.py db list
+py netmap.py compare path\to\baseline.xml path\to\later.xml --csv outputs\comparison.csv --html outputs\comparison.html
 py netmap.py db backup --output backups\netmap.sqlite3
 py netmap.py db restore --input backups\netmap.sqlite3 --confirm-restore
 py netmap.py db delete SNAPSHOT_ID --yes
 ```
 
-The dashboard exposes asset history, finding status filters and event history, and data management. Restore requires an explicit confirmation and creates a pre-restore safety backup. Deleting a snapshot also deletes its observations, related comparisons, and findings with no remaining observations. Database paths are local; there is no telemetry or remote synchronization.
+For the isolated demo inventory, use `py netmap.py db list --synthetic`; bundled XML fixture imports are automatically routed to that store. Add `--synthetic` to `db init`, `db backup`, `db restore`, or `db delete` to target the demo database. Arbitrary synthetic XML can be marked with `py netmap.py db import path\to\fixture.xml --synthetic`.
+
+For triage, start the dashboard, load an authorized scan or use **Finding Triage**, choose a finding and status, enter an investigation/remediation note, then click **Save triage**. Accepted-risk and false-positive decisions require a reason. For findings CSV, run the `report` command below or use **Reports & Exports** in the dashboard. Comparison results are persisted by the CLI `compare` command and the dashboard comparison flow; the CLI writes CSV and HTML. Restore requires explicit confirmation and creates a pre-restore safety backup. Deleting a snapshot also deletes its observations, related comparisons, and findings with no remaining observations. Database paths are local; there is no telemetry or remote synchronization.
 
 The CLI can create reports without a dashboard:
 
@@ -133,24 +136,28 @@ The input's service name is evidence, not a confirmed software identity unless N
 ```powershell
 py -m pip install -r requirements-dev.txt
 py -m unittest discover -s tests -v
-py -m py_compile netmap.py netmap_models.py netmap_store.py dashboard.py tests\test_netmap.py tests\test_netmap_store.py tests\test_dashboard_overview.py
-py -m ruff check netmap.py netmap_models.py netmap_store.py dashboard.py tests\test_netmap.py tests\test_netmap_store.py tests\test_dashboard_overview.py
-py -m ruff format --check netmap.py netmap_models.py netmap_store.py dashboard.py tests\test_netmap.py tests\test_netmap_store.py tests\test_dashboard_overview.py
+py -m py_compile netmap.py netmap_models.py netmap_store.py dashboard.py tests\test_netmap.py tests\test_netmap_store.py tests\test_dashboard_overview.py tests\test_end_to_end.py
+py -m ruff check netmap.py netmap_models.py netmap_store.py dashboard.py tests\test_netmap.py tests\test_netmap_store.py tests\test_dashboard_overview.py tests\test_end_to_end.py
+py -m ruff format --check netmap.py netmap_models.py netmap_store.py dashboard.py tests\test_netmap.py tests\test_netmap_store.py tests\test_dashboard_overview.py tests\test_end_to_end.py
 py -m pip check
 py -m pip_audit -r requirements-dev.txt
 ```
 
-Tests use only synthetic fixtures and temporary files. They cover malformed and oversized XML, duplicate endpoints, coverage-aware comparisons, rule evidence, safe HTML/SVG/CSV/JSON output, output/input collision checks, private target bounds, authorization acknowledgement, CLI demonstration, SQLite deduplication, triage and event history, backups/restores, deletion cascades, dashboard empty/demo/upload/comparison states, and filters.
+Tests use only synthetic fixtures and temporary files. They cover malformed and oversized XML, duplicate endpoints, coverage-aware comparisons, rule evidence, safe HTML/SVG/CSV/JSON output, output/input collision checks, private target bounds, authorization acknowledgement, CLI demonstration, SQLite deduplication, triage and event history, backups/restores, deletion cascades, dashboard empty/demo/upload/comparison states, filters, and a CLI-to-SQLite-to-report workflow across process restarts.
 
 ## Known limitations
 
-- The project is a local portfolio tool, not a multi-user service. It has no authentication, database, cloud deployment, or remote data retention.
-- Scan history is derived from local XML files; it is not a durable asset database. First-seen/last-seen across historical scans are not asserted.
+- The project is a local portfolio tool, not a multi-user service. It has no authentication or cloud deployment.
+- Scan history is retained in the local SQLite database. First-seen/last-seen asset dates are derived from imported observation timestamps; scans with differing coverage still need human interpretation.
 - Nmap command execution was not live-tested in this environment. No target was scanned during this work.
 - Exposure rules are a deliberately small review list and can be false positive or incomplete. They do not validate vulnerability status.
 - Endpoint comparisons depend on Nmap XML coverage and completeness. Different options or network filtering can limit conclusions.
 - The visual graph is capped at 250 host and 250 service nodes for readability. The full inventory remains available in tables and exports.
 - The existing open remediation PR removes scan evidence from the current tree, but historical Git commits are unchanged. If historic artifacts are sensitive, repository owners must decide on history cleanup separately.
+
+## Screenshots
+
+The [dashboard overview screenshot](docs/screenshots/01-overview.jpg) was captured from the running local dashboard with the bundled synthetic demonstration loaded. The synthetic-data banner is visible. It does not contain a real scan. Follow the demo steps above to reproduce this view.
 
 ## Troubleshooting
 

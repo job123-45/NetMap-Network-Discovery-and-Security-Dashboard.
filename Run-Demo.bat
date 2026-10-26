@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 echo =====================================================
 echo NetMap - NETWORK DISCOVERY DASHBOARD
-echo Select or upload a valid Nmap XML scan to begin.
+echo Upload an authorized Nmap XML scan or choose the synthetic demo.
 echo =====================================================
 echo.
 where py >nul 2>nul
@@ -15,7 +15,7 @@ if errorlevel 1 (
 py -m pip install -r requirements.txt
 if errorlevel 1 goto failed
 echo.
-echo Starting NetMap. The first page asks you to select or upload a real Nmap XML scan.
+echo Starting NetMap. The dashboard can load authorized XML or clearly labeled synthetic data.
 py -m streamlit run dashboard.py
 if errorlevel 1 goto failed
 goto done
