@@ -14,6 +14,8 @@ NetMap is designed for local review of Nmap XML and authorized, bounded IPv4 lab
 - Report writes are atomic, and the CLI refuses output/input path collisions.
 - Nmap subprocess arguments are passed as a list (no shell), output is captured rather than logged, and scan results are not printed by the runner.
 - Current synthetic fixtures use documentation address space and `.test` names. Real scan artifacts are ignored locally and were removed from the remediation branch's working tree.
+- The dashboard and CLI persist inventory in a local SQLite database under the user's application-data directory. The database and backups can contain sensitive asset details; keep them local and do not publish them. Set `NETMAP_DATA_DIR` or `NETMAP_DB_PATH` to choose a controlled location. Synthetic records use a separate database.
+- Backup restore requires explicit confirmation and validates the database schema before replacement. Snapshot deletion removes dependent observations and comparisons and removes findings that no longer have observations.
 
 ## Rule assumptions
 
@@ -25,7 +27,7 @@ Nmap XML can be partial and scan options can differ. A missing endpoint is not c
 
 ## Operational limitations
 
-- No authentication, persistence, database, cloud service, or multi-user isolation.
+- No authentication, cloud service, or multi-user isolation. SQLite persistence is local to one user's machine.
 - No live network scan was run for this change. Nmap command behavior is unit-tested with mocks; verify Nmap installation and local lab setup separately.
 - No CVE database or external threat intelligence.
 - XML is limited to 20 MiB; graphical maps are capped at 250 hosts and 250 services.

@@ -1,11 +1,15 @@
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+import netmap_store
 
 
 def control(app, collection, label):
@@ -13,6 +17,15 @@ def control(app, collection, label):
 
 
 class DashboardInputTests(unittest.TestCase):
+    def setUp(self):
+        self.data_dir = tempfile.TemporaryDirectory(prefix="netmap-dashboard-test-")
+        self.env = patch.dict(os.environ, {"NETMAP_DATA_DIR": self.data_dir.name})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        self.data_dir.cleanup()
+
     def start(self):
         return AppTest.from_file(str(ROOT / "dashboard.py"), default_timeout=60).run()
 
@@ -55,6 +68,18 @@ class DashboardInputTests(unittest.TestCase):
             any("telnet" in frame.value.to_string().lower() for frame in app.dataframe)
         )
 
+    def test_local_inventory_assets_and_triage_pages(self):
+        app = self.start()
+        control(app, "radio", "Workspace").set_value("Data Management").run()
+        self.assertFalse(app.exception)
+        self.load_synthetic(app)
+        control(app, "radio", "Workspace").set_value("Assets").run()
+        self.assertFalse(app.exception)
+        self.assertTrue(app.dataframe)
+        control(app, "radio", "Workspace").set_value("Finding Triage").run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any(item.label == "Save triage" for item in app.button))
+
     def test_comparison_uploads_are_separate_and_use_coverage_aware_changes(self):
         app = self.start()
         self.load_synthetic(app)
@@ -83,6 +108,13 @@ class DashboardInputTests(unittest.TestCase):
             )
         )
         self.assertEqual(len(app.download_button), 2)
+        self.assertEqual(netmap_store.list_snapshots(netmap_store.database_path()), [])
+        self.assertGreaterEqual(
+            len(
+                netmap_store.list_snapshots(netmap_store.database_path(synthetic=True))
+            ),
+            2,
+        )
 
 
 if __name__ == "__main__":

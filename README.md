@@ -11,6 +11,8 @@ The repository's built-in demonstration is synthetic. Its address is in the docu
 - Coverage-aware two-snapshot comparisons. Explicit `closed` or `filtered` rows are state changes; missing endpoints are labeled as newly observed, no longer observed, not assessed, or hosts not observed. Missing data is not described as offline or closed.
 - Explainable review signals for reported Telnet, FTP, and database services. They describe defensive review priorities, not confirmed vulnerabilities, CVEs, exploitability, or CVSS.
 - Streamlit dashboard with an explicit synthetic-demo button, XML upload/local saved-scan import, overview, searchable inventory, findings, scan history, comparison, and evidence-backed host-to-service map.
+- Local SQLite persistence for deduplicated snapshots, normalized host/service observations, assets, review findings, triage event history, and saved comparisons. Synthetic data is kept in a separate database.
+- Verified local database backup/restore, per-snapshot deletion with dependent observations removed, and explicit triage reason requirements for accepted-risk/false-positive decisions.
 - HTML, JSON (`netmap.report.v1`, schema at [docs/report-schema-v1.json](docs/report-schema-v1.json)), CSV findings and inventory, and SVG map exports. HTML/SVG text is escaped, CSV formula-like values are quoted, and report writes are atomic.
 - An optional Nmap CLI limited to private or loopback IPv4 targets, up to 256 discovery addresses, up to 2,048 ports per scan, a 1–600 second timeout, a 100 packet/second cap, two retries, and an explicit `--authorized-lab-target` acknowledgement.
 - CI for unit and Streamlit AppTest flows, Python compilation, dependency consistency, and dependency auditing.
@@ -26,7 +28,10 @@ flowchart LR
   E --> F[Coverage-aware comparison]
   E --> G[Explainable review rules]
   E --> H[Evidence-backed host to service graph]
-  E --> I[Streamlit dashboard]
+  E --> K[Local SQLite inventory]
+  K --> I[Streamlit dashboard]
+  K --> L[Assets and finding triage]
+  K --> M[Backup restore and deletion]
   F --> I
   G --> I
   H --> I
@@ -72,7 +77,22 @@ The CLI creates ignored files under `outputs/demo/`: baseline/after JSON, invent
 
 ## Import an Nmap XML scan
 
-For the dashboard, start it locally and select **Upload a scan**, or place XML files in the local-only `scans/` folder and select one. Uploads and parsed results stay in the local Streamlit process. Each XML file is limited to 20 MiB.
+For the dashboard, start it locally and select **Upload a scan**, or place XML files in the local-only `scans/` folder and select one. Uploads and parsed results stay in the local Streamlit process and are persisted in a local SQLite database. Each XML file is limited to 20 MiB.
+
+## Local inventory database
+
+By default, NetMap stores the operational database in the user's application data directory (`%LOCALAPPDATA%\\NetMap` on Windows or `$XDG_DATA_HOME/netmap` on Linux/macOS). Override the folder with `NETMAP_DATA_DIR`, or set `NETMAP_DB_PATH` to an explicit operational database file. The synthetic demo database is kept separately as `demo.sqlite3`. SQLite files contain network inventory and should be treated as sensitive local data; database and backup patterns are ignored by Git.
+
+```powershell
+py netmap.py db init
+py netmap.py db import path\to\authorized-scan.xml
+py netmap.py db list
+py netmap.py db backup --output backups\netmap.sqlite3
+py netmap.py db restore --input backups\netmap.sqlite3 --confirm-restore
+py netmap.py db delete SNAPSHOT_ID --yes
+```
+
+The dashboard exposes asset history, finding status filters and event history, and data management. Restore requires an explicit confirmation and creates a pre-restore safety backup. Deleting a snapshot also deletes its observations, related comparisons, and findings with no remaining observations. Database paths are local; there is no telemetry or remote synchronization.
 
 The CLI can create reports without a dashboard:
 
@@ -113,14 +133,14 @@ The input's service name is evidence, not a confirmed software identity unless N
 ```powershell
 py -m pip install -r requirements-dev.txt
 py -m unittest discover -s tests -v
-py -m py_compile netmap.py netmap_models.py dashboard.py tests\test_netmap.py tests\test_dashboard_overview.py
-py -m ruff check netmap.py netmap_models.py dashboard.py tests\test_netmap.py tests\test_dashboard_overview.py
-py -m ruff format --check netmap.py netmap_models.py dashboard.py tests\test_netmap.py tests\test_dashboard_overview.py
+py -m py_compile netmap.py netmap_models.py netmap_store.py dashboard.py tests\test_netmap.py tests\test_netmap_store.py tests\test_dashboard_overview.py
+py -m ruff check netmap.py netmap_models.py netmap_store.py dashboard.py tests\test_netmap.py tests\test_netmap_store.py tests\test_dashboard_overview.py
+py -m ruff format --check netmap.py netmap_models.py netmap_store.py dashboard.py tests\test_netmap.py tests\test_netmap_store.py tests\test_dashboard_overview.py
 py -m pip check
 py -m pip_audit -r requirements-dev.txt
 ```
 
-Tests use only synthetic fixtures and temporary files. They cover malformed and oversized XML, duplicate endpoints, coverage-aware comparisons, rule evidence, safe HTML/SVG/CSV/JSON output, output/input collision checks, private target bounds, authorization acknowledgement, CLI demonstration, dashboard empty/demo/upload/comparison states, and filters.
+Tests use only synthetic fixtures and temporary files. They cover malformed and oversized XML, duplicate endpoints, coverage-aware comparisons, rule evidence, safe HTML/SVG/CSV/JSON output, output/input collision checks, private target bounds, authorization acknowledgement, CLI demonstration, SQLite deduplication, triage and event history, backups/restores, deletion cascades, dashboard empty/demo/upload/comparison states, and filters.
 
 ## Known limitations
 

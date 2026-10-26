@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 
 import netmap
+import netmap_store
 
 ROOT = Path(__file__).resolve().parent
 
@@ -57,21 +58,29 @@ with st.sidebar:
         '<div class="brand">◈ NetMap</div><div class="brand-sub">Network discovery & security</div>',
         unsafe_allow_html=True,
     )
+    pages = [
+        "Load scan",
+        "Overview",
+        "Network Map",
+        "Exposure Findings",
+        "Host Discovery",
+        "Ports & Services",
+        "Scan History",
+        "Comparison",
+        "Assets",
+        "Finding Triage",
+        "Data Management",
+        "Reports & Exports",
+    ]
+    page = st.radio(
+        "Workspace",
+        pages,
+        index=1 if active_scan else 0,
+        label_visibility="collapsed",
+    )
+    if not active_scan and page not in {"Load scan", "Data Management"}:
+        page = "Load scan"
     if active_scan:
-        page = st.radio(
-            "Workspace",
-            [
-                "Overview",
-                "Network Map",
-                "Exposure Findings",
-                "Host Discovery",
-                "Ports & Services",
-                "Scan History",
-                "Comparison",
-                "Reports & Exports",
-            ],
-            label_visibility="collapsed",
-        )
         if st.button("Change scan", key="change-active-scan"):
             st.session_state.pop("active_scan", None)
             st.rerun()
@@ -163,8 +172,14 @@ def remember_scan(
     """Keep the selected scan and provenance in this local Streamlit session."""
     safe_name = Path(str(source_name).replace("\\", "/")).name
     kind = source_kind or parsed.get("source_kind", "imported_nmap_xml")
+    if netmap.is_bundled_synthetic(parsed):
+        kind = "synthetic_demo"
     parsed = {**parsed, "source": safe_name}
     netmap.set_scan_provenance(parsed, kind, safe_name)
+    db_path = netmap_store.database_path(synthetic=kind == "synthetic_demo")
+    snapshot_id, duplicate = netmap_store.store_snapshot(
+        parsed, netmap.analyze_exposure(parsed), path=db_path
+    )
     ports = ports.copy()
     hosts = hosts.copy()
     for frame in (ports, hosts):
@@ -176,6 +191,9 @@ def remember_scan(
         "ports": ports.copy(),
         "hosts": hosts.copy(),
         "source_name": safe_name,
+        "snapshot_id": snapshot_id,
+        "duplicate": duplicate,
+        "database_path": str(db_path),
     }
 
 
@@ -338,40 +356,30 @@ def show_findings(parsed: dict) -> None:
 
 
 def show_scan_history(current: dict) -> None:
-    records = [
-        {
-            "source": current["source_name"],
-            "source_kind": current["kind"],
-            "scan_time": current["parsed"]["scan_time"],
-            "hosts": len(current["hosts"]),
-            "port_records": len(current["ports"]),
-            "complete": current["parsed"].get("complete"),
-        }
-    ]
-    scan_dir = ROOT / "scans"
-    if scan_dir.is_dir():
-        for path in sorted(
-            scan_dir.glob("*.xml"), key=lambda item: item.name.casefold()
-        ):
-            try:
-                scan = netmap.parse_scan(path)
-            except (ValueError, OSError):
-                continue
-            if path.name != current["source_name"]:
-                records.append(
-                    {
-                        "source": path.name,
-                        "source_kind": scan["source_kind"],
-                        "scan_time": scan["scan_time"],
-                        "hosts": len(scan["hosts"]),
-                        "port_records": len(scan["rows"]),
-                        "complete": scan.get("complete"),
-                    }
-                )
-    st.caption(
-        "History is derived from XML files in the local scans folder and the currently loaded scan. NetMap does not upload observations or retain a database."
+    db_path = current["database_path"]
+    snapshots = netmap_store.list_snapshots(db_path)
+    st.caption("Snapshot history is stored in the local NetMap SQLite database.")
+    if not snapshots:
+        st.info("No snapshots are stored yet.")
+        return
+    st.dataframe(pd.DataFrame(snapshots), width="stretch", hide_index=True)
+    selected = st.selectbox(
+        "Open saved snapshot",
+        snapshots,
+        format_func=lambda item: (
+            f"{item['scan_time']} · {item['source']} · {item['snapshot_id'][:8]}"
+        ),
     )
-    st.dataframe(pd.DataFrame(records), width="stretch", hide_index=True)
+    if st.button("Load selected snapshot", key="load-saved-snapshot"):
+        parsed = netmap_store.load_snapshot(selected["snapshot_id"], db_path)
+        remember_scan(
+            parsed,
+            pd.DataFrame(parsed["rows"], columns=netmap.REPORT_FIELDS),
+            pd.DataFrame(parsed["hosts"], columns=netmap.HOST_FIELDS),
+            selected["source"],
+            selected["source_kind"],
+        )
+        st.rerun()
 
 
 def export_scan(
@@ -459,8 +467,26 @@ def show_comparison(
     source_label: str,
 ) -> pd.DataFrame:
     before, after = netmap.parse_scan(before_path), netmap.parse_scan(after_path)
+    before["source"] = before_name
     after["source"] = after_name
+    if netmap.is_bundled_synthetic(before) and netmap.is_bundled_synthetic(after):
+        source_label = "Synthetic demonstration data"
+    kind = (
+        "synthetic_demo"
+        if source_label == "Synthetic demonstration data"
+        else "imported_nmap_xml"
+    )
+    netmap.set_scan_provenance(before, kind, before_name)
+    netmap.set_scan_provenance(after, kind, after_name)
+    db_path = netmap_store.database_path(synthetic=kind == "synthetic_demo")
+    before_id, _ = netmap_store.store_snapshot(
+        before, netmap.analyze_exposure(before), path=db_path
+    )
+    after_id, _ = netmap_store.store_snapshot(
+        after, netmap.analyze_exposure(after), path=db_path
+    )
     changes = netmap.compare_parsed_scans(before, after, before_name, after_name)
+    netmap_store.save_comparison(before_id, after_id, changes, db_path)
     frame = pd.DataFrame(changes, columns=netmap.COMPARE_FIELDS)
     c1, c2, c3 = st.columns(3)
     c1.metric(
@@ -850,3 +876,159 @@ elif page == "Comparison":
             st.info(
                 "Select both a baseline scan and an after scan. Two valid Nmap XML files are required before comparison."
             )
+
+elif page == "Assets":
+    db_path = active_scan.get("database_path") if active_scan else None
+    assets = netmap_store.list_assets(db_path)
+    if not assets:
+        st.info("No persisted assets yet. Load an authorized Nmap XML scan first.")
+    else:
+        st.caption(
+            "Inventory is derived from imported snapshots in the selected local database."
+        )
+        st.dataframe(pd.DataFrame(assets), width="stretch", hide_index=True)
+
+elif page == "Finding Triage":
+    db_path = active_scan.get("database_path") if active_scan else None
+    statuses = ["all", *netmap_store.FINDING_STATUSES]
+    selected_status = st.selectbox(
+        "Status", statuses, format_func=lambda value: value.replace("_", " ").title()
+    )
+    selected_severity = st.selectbox(
+        "Severity", ["all", "critical", "high", "medium", "low", "info"]
+    )
+    query = st.text_input("Search findings", key="triage-search")
+    findings = netmap_store.list_findings(
+        db_path, status=selected_status, severity=selected_severity, query=query
+    )
+    if not findings:
+        st.info(
+            "No findings match this filter. Import a scan with review signals to begin triage."
+        )
+    else:
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        key: item.get(key)
+                        for key in (
+                            "finding_id",
+                            "severity",
+                            "title",
+                            "status_label",
+                            "ip_address",
+                            "port",
+                            "first_seen",
+                            "last_seen",
+                            "snapshot_count",
+                        )
+                    }
+                    for item in findings
+                ]
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+        options = {
+            f"{item['severity'].upper()} · {item['title']} · {item['finding_id'][:8]}": item
+            for item in findings
+        }
+        label = st.selectbox("Finding to update", list(options))
+        finding = options[label]
+        with st.form("finding-triage-form"):
+            new_status = st.selectbox(
+                "Set status",
+                netmap_store.FINDING_STATUSES,
+                index=netmap_store.FINDING_STATUSES.index(finding["status"]),
+            )
+            reason = st.text_area(
+                "Decision reason (required for accepted risk or false positive)",
+                max_chars=4000,
+            )
+            investigation = st.text_area("Investigation note", max_chars=4000)
+            remediation = st.text_area("Remediation note", max_chars=4000)
+            submitted = st.form_submit_button("Save triage")
+        if submitted:
+            try:
+                netmap_store.update_finding(
+                    finding["finding_id"],
+                    new_status,
+                    reason=reason,
+                    investigation_note=investigation,
+                    remediation_note=remediation,
+                    path=db_path,
+                )
+                st.success("Finding triage saved.")
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+        st.subheader("Triage history")
+        st.dataframe(
+            pd.DataFrame(netmap_store.finding_history(finding["finding_id"], db_path)),
+            width="stretch",
+            hide_index=True,
+        )
+
+elif page == "Data Management":
+    real_path = netmap_store.database_path()
+    demo_path = netmap_store.database_path(synthetic=True)
+    st.caption(
+        "NetMap keeps this inventory on this device. Synthetic demonstration data uses a separate database."
+    )
+    st.write(f"Operational database: `{real_path}`")
+    st.write(f"Synthetic database: `{demo_path}`")
+    for title, path in (
+        ("Operational data", real_path),
+        ("Synthetic demo data", demo_path),
+    ):
+        with st.expander(title, expanded=True):
+            stats = netmap_store.database_stats(path)
+            st.json(stats)
+            if path.exists():
+                st.download_button(
+                    f"Download {title.lower()} backup",
+                    netmap_store.backup_bytes(path),
+                    f"netmap-{title.split()[0].lower()}-backup.sqlite3",
+                    "application/vnd.sqlite3",
+                    key=f"backup-{title}",
+                )
+                snapshots = netmap_store.list_snapshots(path)
+                if snapshots:
+                    selected = st.selectbox(
+                        f"Snapshot to delete from {title.lower()}",
+                        snapshots,
+                        format_func=lambda item: (
+                            f"{item['scan_time']} · {item['source']} · {item['snapshot_id'][:8]}"
+                        ),
+                        key=f"delete-snapshot-{title}",
+                    )
+                    confirm = st.checkbox(
+                        "Confirm deletion of this snapshot and dependent observations",
+                        key=f"confirm-delete-{title}",
+                    )
+                    if st.button(
+                        "Delete selected snapshot",
+                        disabled=not confirm,
+                        key=f"delete-{title}",
+                    ):
+                        netmap_store.delete_snapshot(selected["snapshot_id"], path)
+                        st.success("Snapshot and dependent observations deleted.")
+                        st.rerun()
+    backup_upload = st.file_uploader(
+        "Restore a NetMap SQLite backup", type=["sqlite3", "db"], key="restore-backup"
+    )
+    if backup_upload:
+        confirm_restore = st.checkbox(
+            "I understand restore replaces the operational database; a pre-restore backup will be created."
+        )
+        if st.button("Restore operational backup", disabled=not confirm_restore):
+            try:
+                netmap_store.restore_bytes(
+                    backup_upload.getvalue(), real_path, confirmed=True
+                )
+                st.success(
+                    "Backup restored; a safety backup was created beside the database."
+                )
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))

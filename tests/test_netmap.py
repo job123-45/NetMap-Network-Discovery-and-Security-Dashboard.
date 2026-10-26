@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import netmap
+import netmap_store
 
 
 class NetMapTests(unittest.TestCase):
@@ -27,6 +29,7 @@ class NetMapTests(unittest.TestCase):
 
     def test_streaming_parser_normalizes_models_and_provenance(self):
         parsed = self.before
+        self.assertTrue(netmap.is_bundled_synthetic(parsed))
         self.assertEqual(len(parsed["hosts"]), 1)
         self.assertEqual(parsed["hosts"][0]["ip_address"], "192.0.2.10")
         self.assertEqual(
@@ -326,6 +329,10 @@ class NetMapTests(unittest.TestCase):
                 return SimpleNamespace(returncode=0)
 
             with (
+                patch.dict(
+                    os.environ,
+                    {"NETMAP_DATA_DIR": str(Path(output).parent / "netmap-data")},
+                ),
                 patch.object(netmap.shutil, "which", return_value="nmap-test-double"),
                 patch.object(netmap.subprocess, "run", side_effect=fake_run) as run,
             ):
@@ -338,6 +345,7 @@ class NetMapTests(unittest.TestCase):
             result = subprocess.run(
                 [sys.executable, str(ROOT / "netmap.py"), "demo", "--output", str(out)],
                 cwd=ROOT,
+                env={**os.environ, "NETMAP_DATA_DIR": str(Path(temp) / "netmap-data")},
                 capture_output=True,
                 text=True,
                 check=True,
@@ -368,6 +376,27 @@ class NetMapTests(unittest.TestCase):
                 ],
                 "synthetic_demo",
             )
+
+    def test_cli_comparison_is_persisted_and_keeps_fixtures_separate(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            args = Namespace(
+                before=str(self.before_path),
+                after=str(self.after_path),
+                csv=str(output / "changes.csv"),
+                html=str(output / "changes.html"),
+            )
+            with patch.dict(os.environ, {"NETMAP_DATA_DIR": str(output / "data")}):
+                self.assertEqual(netmap.cmd_compare(args), 0)
+                self.assertEqual(netmap_store.list_snapshots(), [])
+                self.assertEqual(
+                    len(
+                        netmap_store.list_comparisons(
+                            netmap_store.database_path(synthetic=True)
+                        )
+                    ),
+                    1,
+                )
 
 
 if __name__ == "__main__":

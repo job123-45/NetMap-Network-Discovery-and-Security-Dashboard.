@@ -6,6 +6,11 @@ venv/
 .env.*
 !.env.example
 backups/
+data/
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
 outputs/demo-*
 outputs/demo.*
 outputs/demo/

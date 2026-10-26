@@ -234,6 +234,7 @@ def parse_scan(path: str | Path) -> dict[str, Any]:
         scan_coverage: dict[str, set[int]] = {}
         coverage_known = False
         complete = None
+        scan_end_time = ""
         hosts_by_ip: dict[str, dict[str, str]] = {}
         rows_by_endpoint: dict[tuple[str, str, str], dict[str, str]] = {}
         for event, node in iterator:
@@ -252,6 +253,7 @@ def parse_scan(path: str | Path) -> dict[str, Any]:
                 root.remove(node)
             elif node.tag == "finished":
                 complete = node.get("exit", "") == "success"
+                scan_end_time = node.get("timestr", node.get("time", ""))
                 node.clear()
             elif node.tag == "host":
                 ip, addr_type, addresses, status, reason, hostname = _host_details(node)
@@ -364,7 +366,30 @@ def parse_scan(path: str | Path) -> dict[str, Any]:
         coverage_known=coverage_known,
         complete=complete,
     ).to_record()
+    digest = hashlib.sha256()
+    with file_path.open("rb") as source_file:
+        for chunk in iter(lambda: source_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    parsed["content_sha256"] = digest.hexdigest()
+    parsed["scan_end_time"] = scan_end_time
     return set_scan_provenance(parsed, "imported_nmap_xml", file_path.name)
+
+
+def is_bundled_synthetic(parsed: dict[str, Any]) -> bool:
+    """Recognize exact bundled fixture content so it stays in the demo store."""
+    digest = str(parsed.get("content_sha256", "")).lower()
+    fixture_dir = Path(__file__).resolve().parent / "sample_data"
+    for fixture in fixture_dir.glob("*.xml"):
+        fixture_digest = hashlib.sha256()
+        try:
+            with fixture.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    fixture_digest.update(chunk)
+        except OSError:
+            continue
+        if digest and fixture_digest.hexdigest() == digest:
+            return True
+    return False
 
 
 def _expand_port_list(value: str) -> set[int]:
@@ -1090,6 +1115,49 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0 if result.returncode == 0 else 1
 
 
+def _persist_local_snapshot(parsed: dict[str, Any]) -> str:
+    import netmap_store
+
+    demo = parsed.get("source_kind") == "synthetic_demo"
+    snapshot_id, _ = netmap_store.store_snapshot(
+        parsed,
+        analyze_exposure(parsed),
+        scope=parsed.get("scan_scope", {}),
+        path=netmap_store.database_path(synthetic=demo),
+    )
+    return snapshot_id
+
+
+def cmd_db(args: argparse.Namespace) -> int:
+    import netmap_store
+
+    if args.db_action == "init":
+        path = netmap_store.initialize()
+        print(f"Initialized local NetMap database: {path}")
+    elif args.db_action == "import":
+        parsed = parse_scan(args.xml)
+        if is_bundled_synthetic(parsed):
+            set_scan_provenance(parsed, "synthetic_demo", Path(args.xml).name)
+        findings = analyze_exposure(parsed)
+        snapshot_id, duplicate = netmap_store.store_snapshot(parsed, findings)
+        print(f"Snapshot {'already stored' if duplicate else 'stored'}: {snapshot_id}")
+    elif args.db_action == "list":
+        snapshots = netmap_store.list_snapshots()
+        print(json.dumps(snapshots, indent=2, sort_keys=True))
+    elif args.db_action == "backup":
+        path = netmap_store.backup_database(args.output)
+        print(f"Database backup created: {path}")
+    elif args.db_action == "restore":
+        path = netmap_store.restore_database(args.input, confirmed=args.confirm_restore)
+        print(f"Database restored: {path}")
+    elif args.db_action == "delete":
+        if not args.yes:
+            raise ValueError("Snapshot deletion requires --yes.")
+        netmap_store.delete_snapshot(args.snapshot_id)
+        print("Selected snapshot and dependent observations deleted.")
+    return 0
+
+
 def cmd_discover(args: argparse.Namespace) -> int:
     _require_authorization(args)
     _validate_timeout(args.timeout)
@@ -1115,8 +1183,12 @@ def cmd_discover(args: argparse.Namespace) -> int:
         raise ValueError("Nmap finished but the requested XML file was not created.")
     data = parse_scan(dest)
     set_scan_provenance(data, "authorized_nmap_discovery", dest.name)
+    data["scan_scope"] = {"profile": "host-discovery", "network": network}
+    snapshot_id = _persist_local_snapshot(data)
     up = sum(1 for h in data["hosts"] if h["host_status"] == "up")
-    print(f"Discovery complete: {up} up host(s) recorded in {dest}")
+    print(
+        f"Discovery complete: {up} up host(s) recorded in {dest}; local snapshot {snapshot_id}"
+    )
     print(
         "Next: review the host-only subnet in Wireshark and scan only your known target IP."
     )
@@ -1154,9 +1226,16 @@ def cmd_scan(args: argparse.Namespace) -> int:
         raise ValueError("Nmap finished but the requested XML file was not created.")
     parsed = parse_scan(dest)
     set_scan_provenance(parsed, "authorized_nmap_scan", dest.name)
+    parsed["scan_scope"] = {
+        "profile": "service-scan",
+        "target": target,
+        "ports": ports,
+        "scan_type": args.scan_type,
+    }
+    snapshot_id = _persist_local_snapshot(parsed)
     open_rows = [r for r in parsed["rows"] if r["state"] == "open"]
     print(
-        f"Scan complete: {len(parsed['rows'])} port record(s), {len(open_rows)} open port(s). XML: {dest}"
+        f"Scan complete: {len(parsed['rows'])} port record(s), {len(open_rows)} open port(s). XML: {dest}; local snapshot {snapshot_id}"
     )
     print(
         f"Next: py netmap.py report {dest} --csv outputs/scan.csv --html outputs/scan.html"
@@ -1230,12 +1309,27 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
-    changes = compare_scans(args.before, args.after)
     _reject_input_overwrite([args.before, args.after], [args.csv, args.html])
+    before = parse_scan(args.before)
+    after = parse_scan(args.after)
+    synthetic = is_bundled_synthetic(before) and is_bundled_synthetic(after)
+    kind = "synthetic_demo" if synthetic else "imported_nmap_xml"
+    set_scan_provenance(before, kind, Path(args.before).name)
+    set_scan_provenance(after, kind, Path(args.after).name)
+    import netmap_store
+
+    db_path = netmap_store.database_path(synthetic=synthetic)
+    before_id, _ = netmap_store.store_snapshot(
+        before, analyze_exposure(before), path=db_path
+    )
+    after_id, _ = netmap_store.store_snapshot(
+        after, analyze_exposure(after), path=db_path
+    )
+    changes = compare_parsed_scans(
+        before, after, Path(args.before).name, Path(args.after).name
+    )
+    netmap_store.save_comparison(before_id, after_id, changes, db_path)
     write_csv(args.csv, changes, COMPARE_FIELDS)
-    before_parts = {part.lower() for part in Path(args.before).parts}
-    after_parts = {part.lower() for part in Path(args.after).parts}
-    synthetic = "sample_data" in before_parts and "sample_data" in after_parts
     source_note = (
         "SYNTHETIC DEMONSTRATION DATA - NOT A LIVE EXPERIMENT | " if synthetic else ""
     )
@@ -1279,6 +1373,8 @@ def cmd_demo(args: argparse.Namespace) -> int:
     before, after = parse_scan(before_path), parse_scan(after_path)
     set_scan_provenance(before, "synthetic_demo", before_path.name)
     set_scan_provenance(after, "synthetic_demo", after_path.name)
+    before_id = _persist_local_snapshot(before)
+    after_id = _persist_local_snapshot(after)
     _reject_input_overwrite(
         [before_path, after_path],
         [
@@ -1314,6 +1410,14 @@ def cmd_demo(args: argparse.Namespace) -> int:
         )
         write_network_svg(output / f"{name}.svg", parsed)
     changes = compare_parsed_scans(before, after, "before.xml", "after.xml")
+    import netmap_store
+
+    netmap_store.save_comparison(
+        before_id,
+        after_id,
+        changes,
+        netmap_store.database_path(synthetic=True),
+    )
     write_csv(output / "comparison.csv", changes, COMPARE_FIELDS)
     write_html(
         output / "comparison.html",
@@ -1338,6 +1442,25 @@ def build_parser() -> argparse.ArgumentParser:
     subs = parser.add_subparsers(dest="command", required=True)
     check = subs.add_parser("check", help="check that Nmap is installed")
     check.set_defaults(func=cmd_check)
+    database = subs.add_parser("db", help="manage the local NetMap inventory database")
+    db_actions = database.add_subparsers(dest="db_action", required=True)
+    db_actions.add_parser("init", help="initialize the local inventory database")
+    db_import = db_actions.add_parser("import", help="import one Nmap XML snapshot")
+    db_import.add_argument("xml", help="input Nmap XML file")
+    db_actions.add_parser("list", help="list stored snapshots")
+    db_backup = db_actions.add_parser("backup", help="create a verified SQLite backup")
+    db_backup.add_argument("--output", required=True)
+    db_restore = db_actions.add_parser(
+        "restore", help="restore a verified SQLite backup"
+    )
+    db_restore.add_argument("--input", required=True)
+    db_restore.add_argument("--confirm-restore", action="store_true")
+    db_delete = db_actions.add_parser(
+        "delete", help="delete one snapshot and dependent data"
+    )
+    db_delete.add_argument("snapshot_id")
+    db_delete.add_argument("--yes", action="store_true")
+    database.set_defaults(func=cmd_db)
     discovery = subs.add_parser(
         "discover", help="discover hosts in a small private host-only subnet"
     )
