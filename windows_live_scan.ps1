@@ -29,11 +29,11 @@ if (-not $localIp) { throw 'Could not safely identify a private IPv4 on the defa
 
 Write-Host "Target (this computer only): $localIp" -ForegroundColor Yellow
 Write-Host 'Ports: 135,139,445,3389,8000,8080 | Scan type: TCP connect'
-$confirm = Read-Host 'Type SELF to scan this computer, or anything else to cancel'
+$confirm = Read-Host 'Type SELF to acknowledge this is your computer and you authorize this bounded scan, or anything else to cancel'
 if ($confirm -cne 'SELF') { Write-Host 'Cancelled. No scan was run.'; exit 0 }
 
 New-Item -ItemType Directory -Force -Path 'scans','outputs' | Out-Null
-& py 'netmap.py' scan $localIp --scan-type connect --ports '135,139,445,3389,8000,8080' --xml 'scans/windows-own-pc.xml'
+& py 'netmap.py' scan $localIp --authorized-lab-target --scan-type connect --ports '135,139,445,3389,8000,8080' --xml 'scans/windows-own-pc.xml'
 if ($LASTEXITCODE -ne 0) { throw 'Nmap scan did not complete successfully. See the error above.' }
 & py 'netmap.py' report 'scans/windows-own-pc.xml' --csv 'outputs/windows-own-pc.csv' --html 'outputs/windows-own-pc.html' --hosts-csv 'outputs/windows-own-pc-hosts.csv'
 if ($LASTEXITCODE -ne 0) { throw 'Report generation failed.' }
