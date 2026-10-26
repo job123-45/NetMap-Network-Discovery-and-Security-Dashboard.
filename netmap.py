@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """NetMap - lab-only network discovery, Nmap XML reporting and scan comparison.
 
 Use only on systems you own or have explicit permission to test. By design, active
