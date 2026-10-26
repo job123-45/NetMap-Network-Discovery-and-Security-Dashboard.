@@ -24,7 +24,7 @@ A new app session starts without loaded results and never substitutes sample dat
 
 Open **Comparison** after loading a scan. Select valid saved XML for **Baseline scan (original scan)** and **After scan (later scan)**, or choose **Upload two scans** and load one XML into each independent input. Comparison requires both files and reports opened, no-longer-open, and service-fingerprint changes, along with both filenames and timestamps. CSV and HTML comparison downloads contain the selected pair only.
 
-The project includes `scans/live_scan.xml` and `scans/live_scan_after.xml`. Each reports target `172.17.104.158`, one host up and four open TCP ports (135, 139, 445, 8080); the pair has no observed differences. Port 8080's Nmap service/product identification is a fingerprint, not proof of installed Oracle software. An open port by itself does not establish vulnerability.
+Do not commit real scan XML, packet captures, exported reports, or screenshots; they can disclose private network details. Use local files or sanitized synthetic fixtures.
 
 ## Checks
 
