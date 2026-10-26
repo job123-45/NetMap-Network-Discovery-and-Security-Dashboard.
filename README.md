@@ -92,7 +92,7 @@ py netmap.py scan 192.168.56.101 --authorized-lab-target --scan-type connect --p
 py netmap.py discover 192.168.56.0/24 --authorized-lab-target --timeout 180 --xml scans/discovery.xml
 ```
 
-Both commands require Nmap. This audit environment did not have Nmap available, so no scan was run; tests mock the subprocess and do not require network access. The helper `windows_live_scan.ps1` also asks for a typed `SELF` acknowledgement before calling the bounded single-host command.
+Both commands require Nmap. Nmap is installed in the audit environment, but no scan was run; tests mock the subprocess and do not require network access. The helper `windows_live_scan.ps1` also asks for a typed `SELF` acknowledgement before calling the bounded single-host command.
 
 ## How comparison works
 

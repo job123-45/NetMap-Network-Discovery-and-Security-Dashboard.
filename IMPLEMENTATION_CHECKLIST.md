@@ -4,7 +4,7 @@ Baseline branch: `audit/remove-live-scan-artifacts` (existing open PR #1). The t
 
 ## Phases
 
-- [x] Phase 1 — Audit source tree, dependencies, current branch/PR, scripts, baseline test setup, and data-removal remediation. Nmap is unavailable here; no live scan is run.
+- [x] Phase 1 — Audit source tree, dependencies, current branch/PR, scripts, baseline test setup, and data-removal remediation. Nmap is installed in the final audit environment; no live scan was run.
 - [x] Phase 2 — Add typed inventory records, stable IDs, bounded streaming Nmap XML parsing, normalization, provenance, scan completion, and coverage.
 - [x] Phase 3 — Add confidence/limitation-aware scan differences and explainable service exposure rules, with unit coverage.
 - [x] Phase 4 — Add explicit synthetic loading, exposure and history views, searchable inventory, and host-to-observed-service map.
@@ -20,4 +20,4 @@ Baseline branch: `audit/remove-live-scan-artifacts` (existing open PR #1). The t
 - The pre-change unit suite included UI tests pointing to scans intentionally removed from this branch. Its parser tests covered basic parsing, comparison, and HTML but not CSV formula injection, missing scan coverage, or output safety.
 - The parser materialized the full XML tree, had no size bound, and compared endpoint absence as no longer open.
 - CLI scan commands had target and range checks but no explicit acknowledgement flag; report outputs did not guard spreadsheet formulas or input overwrite.
-- Nmap was not available on PATH. Scanner command construction will be tested through mocked subprocess tests only; no network scan is represented as verified.
+- Scanner command construction is tested through mocked subprocess tests only; no network scan is represented as verified.
