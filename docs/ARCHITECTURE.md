@@ -12,23 +12,29 @@ flowchart LR
   M --> D[Coverage-aware diff]
   M --> R[Explainable rules]
   M --> G[Observed host-to-service graph]
-  M --> U[Local Streamlit UI]
+  M --> S[Local SQLite store]
+  S --> U[Local Streamlit UI]
   D --> U
   R --> U
   G --> U
   M --> E[HTML JSON CSV SVG exports]
 ```
 
-The Streamlit app reads local files or user uploads and does not execute Nmap. The optional CLI owns the only active-scanning path. The project has no server-side database, authentication, cloud integration, or remote telemetry.
+The Streamlit app reads local files or user uploads and does not execute Nmap. The optional CLI owns the only active-scanning path. The database is a user-local SQLite file; there is no server-side database, cloud integration, or remote telemetry.
 
 ## Modules and data structures
 
 - `netmap.py` contains XML ingestion, validation, analysis, comparison, report writers, and CLI entry points. The parser uses `defusedxml.ElementTree.iterparse` (allowing Nmap's normal DTD while forbidding entities and external references), clears each host element after normalization, and rejects files larger than 20 MiB.
 - `netmap_models.py` defines immutable `HostAsset`, `ServiceObservation`, and `ScanInventory` records. `to_record()` provides a boundary to the existing DataFrame and JSON interfaces.
 - `dashboard.py` adapts a selected scan to Streamlit. It keeps the current selection in session state and parses uploads in temporary directories using a fixed internal filename.
+- `netmap_store.py` owns local SQLite schema version 1, snapshot deduplication, host/service observations, finding triage events, saved comparisons, backups, restores, and deletion.
 - `sample_data/` contains synthetic-only XML fixtures in documentation IPv4 space with `.test` names. The dashboard loads them only after an explicit button click.
 
 Host IDs are SHA-256 prefixes of the normalized address. Service IDs combine the host ID, protocol, and normalized port. Scan IDs derive from the XML scanner, timestamp, and scan arguments; raw scan arguments are not emitted in reports.
+
+## Local persistence
+
+Operational data defaults to the platform application-data directory and can be configured with `NETMAP_DATA_DIR` or `NETMAP_DB_PATH`. Synthetic demo data uses a separate `demo.sqlite3`. Imports are deduplicated by source kind and content digest. Host and service observations are indexed per snapshot; finding observations and event history preserve review state over time. Missing coverage never automatically resolves findings. Backup uses SQLite's online backup API. Restore requires explicit confirmation and validates integrity, foreign keys, supported schema version, and exact schema before replacing the database; an existing database receives a neighboring pre-restore backup. Snapshot deletion cascades related observations and comparisons and removes findings with no remaining observations.
 
 ## Parser and coverage behavior
 
