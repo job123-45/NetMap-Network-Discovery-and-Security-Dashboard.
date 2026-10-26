@@ -108,11 +108,52 @@ An output path cannot overwrite either XML input. Report contents include scan t
 
 ## Optional authorized lab scanning
 
-The Streamlit dashboard does not scan. The CLI requires a separate acknowledgement flag and rejects hostnames, public targets, IPv6, broad ranges, and excessive port lists. These controls help bound accidental use; they do not prove that you have permission. Scan only systems and private/loopback ranges you own or have explicit authorization to test.
+The Streamlit dashboard does not scan. The CLI requires a separate acknowledgement flag and rejects hostnames, public targets, IPv6, broad ranges, and excessive port lists. Its private/loopback IPv4 scope guard is a technical bound, not permission to scan. Before running either command, enter the exact host or CIDR you are authorized to assess and inspect the value shown. The examples run only after you type `SCAN`; an empty target or any other response cancels without scanning.
 
 ```powershell
-py netmap.py scan 192.168.56.101 --authorized-lab-target --scan-type connect --ports 22,80,443 --timeout 120 --xml scans/lab.xml
-py netmap.py discover 192.168.56.0/24 --authorized-lab-target --timeout 180 --xml scans/discovery.xml
+$target = Read-Host 'Enter the exact private/loopback IPv4 host you are authorized to assess'
+Write-Host "Review target: $target"
+$confirmation = Read-Host 'Type SCAN only if you own or have explicit authorization for this target'
+if ([string]::IsNullOrWhiteSpace($target) -or $confirmation -cne 'SCAN') {
+    Write-Host 'Cancelled; no scan was run.'
+} else {
+    py netmap.py scan "$target" --authorized-lab-target --scan-type connect --ports '22,80,443' --timeout 120 --xml scans/lab.xml
+}
+```
+
+```bash
+read -r -p 'Enter the exact private/loopback IPv4 host you are authorized to assess: ' target
+printf 'Review target: %s\n' "$target"
+read -r -p 'Type SCAN only if you own or have explicit authorization for this target: ' confirmation
+if [[ -z "$target" || "$confirmation" != "SCAN" ]]; then
+    printf '%s\n' 'Cancelled; no scan was run.'
+else
+    python3 netmap.py scan "$target" --authorized-lab-target --scan-type connect --ports '22,80,443' --timeout 120 --xml scans/lab.xml
+fi
+```
+
+The discovery command scans a range, so review and confirm its CIDR just as carefully:
+
+```powershell
+$network = Read-Host 'Enter the exact private/loopback IPv4 CIDR you are authorized to assess'
+Write-Host "Review network: $network"
+$confirmation = Read-Host 'Type SCAN only if you own or have explicit authorization for this range'
+if ([string]::IsNullOrWhiteSpace($network) -or $confirmation -cne 'SCAN') {
+    Write-Host 'Cancelled; no scan was run.'
+} else {
+    py netmap.py discover "$network" --authorized-lab-target --timeout 180 --xml scans/discovery.xml
+}
+```
+
+```bash
+read -r -p 'Enter the exact private/loopback IPv4 CIDR you are authorized to assess: ' network
+printf 'Review network: %s\n' "$network"
+read -r -p 'Type SCAN only if you own or have explicit authorization for this range: ' confirmation
+if [[ -z "$network" || "$confirmation" != "SCAN" ]]; then
+    printf '%s\n' 'Cancelled; no scan was run.'
+else
+    python3 netmap.py discover "$network" --authorized-lab-target --timeout 180 --xml scans/discovery.xml
+fi
 ```
 
 Both commands require Nmap. Nmap is installed in the audit environment, but no scan was run; tests mock the subprocess and do not require network access. The helper `windows_live_scan.ps1` also asks for a typed `SELF` acknowledgement before calling the bounded single-host command.
