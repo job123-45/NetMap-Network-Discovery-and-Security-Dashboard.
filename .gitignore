@@ -9,7 +9,9 @@ backups/
 outputs/demo-*
 outputs/demo.*
 
-# Keep real scan output and packet captures out of the public repository.
-scans/live_scan*
-scans/nmap_scan_capture.pcapng
-outputs/live_scan*
+# Do not publish screenshots or generated reports that may contain real scan data.
+evidence/screenshots/*
+evidence/NetMap_Screenshot_Evidence.docx
+evidence/NetMap_Screenshot_Evidence.pdf
+NetMap_Assessment_9_Report.docx
+NetMap_Assessment_9_Report.pdf
