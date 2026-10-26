@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:netmap:report-schema:v1",
+  "title": "NetMap report v1",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "scan", "summary", "hosts", "services", "findings", "limitations"],
+  "properties": {
+    "schema_version": {"const": "netmap.report.v1"},
+    "generated_at": {"type": "string", "description": "The XML-reported scan timestamp; not the local report-write time."},
+    "scan": {
+      "type": "object",
+      "required": ["id", "timestamp", "source", "source_kind", "scanner", "complete", "coverage"],
+      "properties": {
+        "id": {"type": "string"},
+        "timestamp": {"type": "string"},
+        "source": {"type": "string", "description": "Basename only; no absolute path."},
+        "source_kind": {"type": "string", "enum": ["imported_nmap_xml", "authorized_nmap_scan", "authorized_nmap_discovery", "synthetic_demo"]},
+        "scanner": {"type": "string"},
+        "complete": {"type": ["boolean", "null"]},
+        "coverage": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 65535}}}
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": ["hosts", "services", "open_services", "findings"],
+      "properties": {
+        "hosts": {"type": "integer", "minimum": 0},
+        "services": {"type": "integer", "minimum": 0},
+        "open_services": {"type": "integer", "minimum": 0},
+        "findings": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "hosts": {"type": "array", "items": {"type": "object", "required": ["host_id", "scan_id", "scan_time", "source_kind", "source_file", "ip_address", "host_status"]}},
+    "services": {"type": "array", "items": {"type": "object", "required": ["service_id", "scan_id", "scan_time", "source_kind", "source_file", "ip_address", "port", "protocol", "state", "service", "service_identification"]}},
+    "findings": {"type": "array", "items": {"type": "object", "required": ["rule_id", "severity", "evidence", "explanation", "limitation", "recommendation", "timestamp", "source"]}},
+    "limitations": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+  },
+  "additionalProperties": false
+}

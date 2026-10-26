@@ -8,6 +8,8 @@ venv/
 backups/
 outputs/demo-*
 outputs/demo.*
+outputs/demo/
+outputs/
 
 # Do not publish screenshots or generated reports that may contain real scan data.
 evidence/screenshots/*

@@ -1,8 +1,11 @@
 <?xml version="1.0"?>
 <!DOCTYPE nmaprun>
-<nmaprun scanner="nmap" args="nmap -sS -sV -oX before.xml 192.168.56.101" start="1792662000" startstr="Thu Oct 22 10:00:00 2026" version="7.95">
-<host><status state="up" reason="arp-response"/><address addr="192.168.56.101" addrtype="ipv4"/><hostnames><hostname name="lab-target" type="PTR"/></hostnames><ports>
-<port protocol="tcp" portid="22"><state state="open" reason="syn-ack"/><service name="ssh" product="OpenSSH" version="9.6p1"/></port>
+<!-- SYNTHETIC FIXTURE: documentation-range address; not a live scan. -->
+<nmaprun scanner="nmap" args="nmap -sT -sV -oX before.xml 192.0.2.10" start="1792662000" startstr="Thu Oct 22 10:00:00 2026" version="7.95">
+<scaninfo type="connect" protocol="tcp" numservices="4" services="22-23,80,443"/>
+<host><status state="up" reason="syn-ack"/><address addr="192.0.2.10" addrtype="ipv4"/><hostnames><hostname name="netmap-synthetic.test" type="PTR"/></hostnames><ports>
+<port protocol="tcp" portid="22"><state state="open" reason="syn-ack"/><service name="ssh" product="OpenSSH" version="9.6p1" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="23"><state state="open" reason="syn-ack"/><service name="telnet" method="probed" conf="10"/></port>
 <port protocol="tcp" portid="80"><state state="open" reason="syn-ack"/><service name="http" product="Apache httpd" version="2.4.58"/></port>
 <port protocol="tcp" portid="443"><state state="closed" reason="reset"/><service name="https"/></port>
 </ports></host><runstats><finished time="1792662001" timestr="Thu Oct 22 10:00:01 2026" exit="success"/><hosts up="1" down="0" total="1"/></runstats></nmaprun>
