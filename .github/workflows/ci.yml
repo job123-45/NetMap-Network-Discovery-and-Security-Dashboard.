@@ -1,0 +1,39 @@
+name: NetMap checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install pinned dependencies and audit tool
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run unit and dashboard tests
+        run: python -m unittest discover -s tests -v
+      - name: Compile Python files
+        run: python -m py_compile netmap.py netmap_models.py netmap_store.py dashboard.py tests/test_netmap.py tests/test_netmap_store.py tests/test_dashboard_overview.py tests/test_end_to_end.py
+      - name: Lint Python files
+        run: python -m ruff check netmap.py netmap_models.py netmap_store.py dashboard.py tests/test_netmap.py tests/test_netmap_store.py tests/test_dashboard_overview.py tests/test_end_to_end.py
+      - name: Check Python formatting
+        run: python -m ruff format --check netmap.py netmap_models.py netmap_store.py dashboard.py tests/test_netmap.py tests/test_netmap_store.py tests/test_dashboard_overview.py tests/test_end_to_end.py
+      - name: Check dependency consistency
+        run: python -m pip check
+      - name: Audit declared dependencies
+        run: python -m pip_audit -r requirements-dev.txt

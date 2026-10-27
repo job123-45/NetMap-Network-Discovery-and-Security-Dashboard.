@@ -1,11 +1,10 @@
 NETMAP — START HERE
 
-1. Read WINDOWS_QUICKSTART.md.
-2. Start with: py -m pip install -r requirements.txt; py -m streamlit run dashboard.py
-3. The first screen asks you to select a valid saved Nmap XML file or upload one, then click Load Scan.
-4. Overview, Host Discovery, Ports & Services, and Reports & Exports all use that single loaded real scan.
-5. Use Comparison for two separate real XML scans (Baseline and After); both saved scans and two-file upload are supported.
-6. Use Change scan in the sidebar to clear the current scan and return to the selection screen.
-7. Run automated checks with: py -m unittest discover -s tests -v
-8. Saved scan XML/text and capture remain under scans\. Existing scan facts and capture limitations are documented in README.md and IMPLEMENTATION_STATUS.md.
-9. No synthetic data is loaded by the production dashboard or launcher. Fixtures under sample_data\ are reserved for automated tests.
+1. Read README.md, then SECURITY.md before using the optional scan commands.
+2. Install: py -3 -m venv .venv; .\.venv\Scripts\Activate.ps1; py -m pip install -r requirements.txt
+3. Run the synthetic end-to-end demonstration: py netmap.py demo
+4. Start the local UI: py -m streamlit run dashboard.py
+5. Click Load synthetic demonstration for a safe, clearly labeled walkthrough.
+6. Upload an Nmap XML file to inspect real authorized observations locally; no network scan starts in the dashboard.
+7. Run tests with: py -m unittest discover -s tests -v
+8. Real scans, reports, screenshots, and packet captures should remain local unless sanitized and intentionally reviewed for publication.
