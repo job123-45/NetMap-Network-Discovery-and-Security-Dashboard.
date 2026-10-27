@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!DOCTYPE nmaprun>
+<!-- SYNTHETIC FIXTURE: documentation-range address; not a live scan. -->
+<nmaprun scanner="nmap" args="nmap -sT -sV -oX after.xml 192.0.2.10" start="1792665600" startstr="Thu Oct 22 11:00:00 2026" version="7.95">
+<scaninfo type="connect" protocol="tcp" numservices="5" services="22-23,80,443,8080"/>
+<host><status state="up" reason="syn-ack"/><address addr="192.0.2.10" addrtype="ipv4"/><hostnames><hostname name="netmap-synthetic.test" type="PTR"/></hostnames><ports>
+<port protocol="tcp" portid="22"><state state="open" reason="syn-ack"/><service name="ssh" product="OpenSSH" version="9.7p1" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="23"><state state="filtered" reason="no-response"/><service name="telnet" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="80"><state state="filtered" reason="no-response"/><service name="http" product="Apache httpd" version="2.4.58"/></port>
+<port protocol="tcp" portid="443"><state state="closed" reason="reset"/><service name="https"/></port>
+<port protocol="tcp" portid="8080"><state state="open" reason="syn-ack"/><service name="http-proxy" product="Example Service" version="2.0"/></port>
+</ports></host><runstats><finished time="1792665601" timestr="Thu Oct 22 11:00:01 2026" exit="success"/><hosts up="1" down="0" total="1"/></runstats></nmaprun>
