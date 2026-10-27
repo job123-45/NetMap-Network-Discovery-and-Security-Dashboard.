@@ -194,7 +194,7 @@ Tests use only synthetic fixtures and temporary files. They cover malformed and 
 - Exposure rules are a deliberately small review list and can be false positive or incomplete. They do not validate vulnerability status.
 - Endpoint comparisons depend on Nmap XML coverage and completeness. Different options or network filtering can limit conclusions.
 - The visual graph is capped at 250 host and 250 service nodes for readability. The full inventory remains available in tables and exports.
-- The existing open remediation PR removes scan evidence from the current tree, but historical Git commits are unchanged. If historic artifacts are sensitive, repository owners must decide on history cleanup separately.
+- The rewritten `main` and remediation branch histories no longer reach the original exposure commit, but closed PR #1 still exposes pre-rewrite history through GitHub-managed `refs/pull/1/head`, whose ancestry includes the original exposure commit. GitHub Support must assess cleanup of that managed reference and cached views. Forks, old local clones, and external caches may retain copies; a clean branch tree does not prove every historical copy is gone.
 
 ## Screenshots
 
